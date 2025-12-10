@@ -239,8 +239,7 @@ const plugin: JupyterFrontEndPlugin<void> = {
         const navigatePath = relativePath === null ? '' : relativePath;
 
         try {
-          const absolutePath =
-            navigatePath === '' ? '/' : '/' + navigatePath;
+          const absolutePath = navigatePath === '' ? '/' : '/' + navigatePath;
           await fileBrowser.model.cd(absolutePath);
         } catch (error) {
           console.error('Failed to navigate file browser:', error);
@@ -256,7 +255,8 @@ const plugin: JupyterFrontEndPlugin<void> = {
     commands.addCommand(OPEN_TERMINAL_CMD, {
       label: 'Open Terminal at Location',
       caption: "Open a terminal at the kernel's directory",
-      isEnabled: () => lastClickedKernelName !== null && terminalTracker !== null,
+      isEnabled: () =>
+        lastClickedKernelName !== null && terminalTracker !== null,
       execute: async () => {
         if (!lastClickedKernelName) {
           await showErrorMessage(

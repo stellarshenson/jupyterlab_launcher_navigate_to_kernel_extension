@@ -61,7 +61,7 @@ publish: check_dependencies install
 
 ## install all required build dependencies
 install_dependencies:
-	conda install -y nodejs yarn --update-all
+	conda install -y "nodejs>=22,<25" yarn --update-all
 	pip install twine
 	npm install rimraf
 

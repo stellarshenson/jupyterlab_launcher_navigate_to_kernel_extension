@@ -14,6 +14,43 @@ import tornado
 class KernelPathHandler(APIHandler):
     """Handler for getting kernel installation path by display name."""
 
+    def _get_all_kernelspecs(self) -> dict:
+        """Get all kernelspecs from standard and dynamic providers.
+
+        Queries the standard KernelSpecManager plus any installed dynamic
+        kernel providers like nb_conda_kernels and nb_venv_kernels.
+
+        Returns:
+            Combined dict of all available kernelspecs
+        """
+        all_specs = {}
+
+        # Standard kernelspecs
+        ksm = KernelSpecManager()
+        all_specs.update(ksm.get_all_specs())
+
+        # Try nb_conda_kernels if available
+        try:
+            from nb_conda_kernels import CondaKernelSpecManager
+            cksm = CondaKernelSpecManager()
+            all_specs.update(cksm.get_all_specs())
+        except ImportError:
+            pass
+        except Exception as e:
+            self.log.debug(f"Error loading conda kernels: {e}")
+
+        # Try nb_venv_kernels if available
+        try:
+            from nb_venv_kernels import VEnvKernelSpecManager
+            vksm = VEnvKernelSpecManager()
+            all_specs.update(vksm.get_all_specs())
+        except ImportError:
+            pass
+        except Exception as e:
+            self.log.debug(f"Error loading venv kernels: {e}")
+
+        return all_specs
+
     @tornado.web.authenticated
     async def get(self, display_name: str):
         """Get the path information for a kernel by its display name.
@@ -22,9 +59,8 @@ class KernelPathHandler(APIHandler):
             display_name: The display name of the kernel (URL-decoded by tornado)
         """
         try:
-            # Get all available kernelspecs
-            ksm = KernelSpecManager()
-            all_specs = ksm.get_all_specs()
+            # Get all available kernelspecs including dynamic providers
+            all_specs = self._get_all_kernelspecs()
 
             # Find the kernel matching the display name
             kernel_info = None
@@ -74,34 +110,78 @@ class KernelPathHandler(APIHandler):
         executable_path: str | None,
         resource_dir: str
     ) -> str | None:
-        """Extract the conda/virtualenv environment path from the executable.
+        """Extract the project path from the executable.
+
+        For uv/venv environments (.venv folder), returns the project root
+        (one level up from .venv). For conda local environments, returns
+        two levels up. For system/global conda, returns the environment root.
 
         Args:
             executable_path: Path to the Python executable
             resource_dir: The kernel's resource directory
 
         Returns:
-            The environment root path or None if not in an environment
+            The project or environment root path, or None if not determinable
         """
         if not executable_path:
             return None
 
-        # Resolve any symlinks to get the real path
+        # Use original path first (before symlink resolution) for .venv detection
+        # This is important because .venv/bin/python often symlinks to system Python
+        original_path = executable_path
+
+        # Pattern 1: uv/venv with .venv folder - /project/.venv/bin/python
+        # Return project root (one level up from .venv)
+        # Check original path first (before symlink resolution)
+        venv_dot_match = re.match(r"^(.*)/(\.venv)/bin/python.*$", original_path)
+        if venv_dot_match:
+            project_root = venv_dot_match.group(1)
+            if os.path.isdir(project_root):
+                return project_root
+
+        # Pattern 2: Named virtualenv - /path/to/venv/bin/python (not .venv)
+        # Check if there's a pyvenv.cfg in the parent of bin/
+        venv_match = re.match(r"^(.*)/bin/python.*$", original_path)
+        if venv_match:
+            potential_venv = venv_match.group(1)
+            pyvenv_cfg = os.path.join(potential_venv, "pyvenv.cfg")
+            if os.path.exists(pyvenv_cfg):
+                # For named venvs, return the venv directory itself
+                return potential_venv
+
+        # Now resolve symlinks for conda detection
         try:
             real_path = os.path.realpath(executable_path)
         except (OSError, ValueError):
             real_path = executable_path
 
-        # Pattern 1: Conda environment - /path/to/envs/envname/bin/python
-        # or /opt/conda/envs/envname/bin/python
-        conda_match = re.match(
+        # Pattern 3: Conda local environment - /project/subdir/envs/envname/bin/python
+        # Return project root (two levels up from envs/envname)
+        conda_local_match = re.match(
+            r"^(.*)/([^/]+)/envs/([^/]+)/bin/python.*$",
+            real_path
+        )
+        if conda_local_match:
+            # Check if this looks like a local project env (not system conda)
+            potential_project = conda_local_match.group(1)
+            subdir = conda_local_match.group(2)
+            # If it's under a typical project structure, go to project root
+            if subdir not in ("opt", "usr", "home"):
+                project_root = potential_project
+                if os.path.isdir(project_root):
+                    return project_root
+
+        # Pattern 4: Global conda environment - /opt/conda/envs/envname/bin/python
+        # or ~/miniconda3/envs/envname/bin/python
+        # Return the environment root
+        conda_global_match = re.match(
             r"^(.*/(?:envs|conda)/[^/]+)(?:/bin/python.*)?$",
             real_path
         )
-        if conda_match:
-            return conda_match.group(1)
+        if conda_global_match:
+            return conda_global_match.group(1)
 
-        # Pattern 2: Base conda - /opt/conda/bin/python or similar
+        # Pattern 5: Base conda - /opt/conda/bin/python or similar
         base_conda_match = re.match(
             r"^(/opt/conda|/home/[^/]+/(?:mini)?conda3?|/usr/local/conda)(?:/bin/python.*)?$",
             real_path
@@ -109,16 +189,7 @@ class KernelPathHandler(APIHandler):
         if base_conda_match:
             return base_conda_match.group(1)
 
-        # Pattern 3: Virtualenv - /path/to/venv/bin/python
-        # Check if there's a pyvenv.cfg in the parent of bin/
-        venv_match = re.match(r"^(.*)/bin/python.*$", real_path)
-        if venv_match:
-            potential_venv = venv_match.group(1)
-            pyvenv_cfg = os.path.join(potential_venv, "pyvenv.cfg")
-            if os.path.exists(pyvenv_cfg):
-                return potential_venv
-
-        # Pattern 4: System Python with kernelspec in share/jupyter/kernels
+        # Pattern 6: System Python with kernelspec in share/jupyter/kernels
         # Return the directory containing the kernelspec
         if "/share/jupyter/kernels/" in resource_dir:
             # Go up to the environment root
@@ -128,7 +199,6 @@ class KernelPathHandler(APIHandler):
                 return parts[0]
 
         # Fallback: try to find environment root from executable path structure
-        # Look for common patterns like envname/bin/python
         bin_match = re.match(r"^(.*)/bin/python.*$", real_path)
         if bin_match:
             potential_env = bin_match.group(1)

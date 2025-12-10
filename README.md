@@ -24,7 +24,7 @@ Right-click on any kernel launcher card to navigate to its project directory or 
 ## Install
 
 ```bash
-make install
+pip install jupyterlab-launcher-navigate-to-kernel-extension
 ```
 
 ## Uninstall

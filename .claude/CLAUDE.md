@@ -170,6 +170,12 @@ When building agent system prompts, use the structured template in `.claude/AGEN
     **Result**: summary of the work done
 ```
 
+**Version Tagging**: If the project is versioned (has `package.json`, `pyproject.toml`, `Cargo.toml`, or similar), include the version number in the journal entry format:
+```
+<number>. **Task - <short 3-5 word depiction>** (v1.2.3): task description / query description / summary<br>
+    **Result**: summary of the work done
+```
+
 **When NOT creating journal entry**: State explicitly "Not logging to journal: <reason>"
 
 **Journal Archiving Rule**:

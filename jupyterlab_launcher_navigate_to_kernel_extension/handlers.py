@@ -138,13 +138,23 @@ class KernelPathHandler(APIHandler):
 
         # Priority check: If .venv is anywhere in the path (original OR resolved),
         # navigate to one level up from .venv
+        # Handles both: /project/.venv/bin/python and /project/.venv/envname/bin/python
         for path_to_check in [original_path, real_path]:
+            # Check for /.venv/ (with trailing slash - .venv as intermediate directory)
             if "/.venv/" in path_to_check:
-                # Extract everything before /.venv/
                 venv_idx = path_to_check.find("/.venv/")
                 project_root = path_to_check[:venv_idx]
                 if os.path.isdir(project_root):
                     return project_root
+            # Check for /.venv at end of a path segment (e.g., if path ends with .venv)
+            elif "/.venv" in path_to_check:
+                venv_idx = path_to_check.find("/.venv")
+                # Make sure it's actually .venv directory, not something like .venv-backup
+                remaining = path_to_check[venv_idx + 6:]  # after "/.venv"
+                if remaining == "" or remaining.startswith("/"):
+                    project_root = path_to_check[:venv_idx]
+                    if os.path.isdir(project_root):
+                        return project_root
 
         # Pattern 1: uv/venv with .venv folder - /project/.venv/bin/python
         # Return project root (one level up from .venv)

@@ -123,6 +123,16 @@ class KernelPathHandler(APIHandler):
         Returns:
             The project or environment root path, or None if not determinable
         """
+        # PRIORITY CHECK: If .venv is in resource_dir, extract project root
+        # This handles conda local envs where argv[0] is just "python" (relative)
+        # but resource_dir contains the full path like:
+        # /project/.venv/envname/share/jupyter/kernels/python3
+        if resource_dir and "/.venv/" in resource_dir:
+            venv_idx = resource_dir.find("/.venv/")
+            project_root = resource_dir[:venv_idx]
+            if os.path.isdir(project_root):
+                return project_root
+
         if not executable_path:
             return None
 

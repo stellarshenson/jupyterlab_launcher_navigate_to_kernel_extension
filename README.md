@@ -8,7 +8,9 @@
 [![Brought To You By KOLOMOLO](https://img.shields.io/badge/Brought%20To%20You%20By-KOLOMOLO-00ffff?style=flat)](https://kolomolo.com)
 [![Donate PayPal](https://img.shields.io/badge/Donate-PayPal-blue?style=flat)](https://www.paypal.com/donate/?hosted_button_id=B4KPBJDLLXTSA)
 
-Right-click on any kernel launcher card to navigate to its project directory or open a terminal there.
+Right-click on any kernel launcher card to navigate to its project directory or open a terminal there. Intended to help navigate around a busy workspace with many projects. Similar to [jupyterlab_terminal_show_in_file_browser_extension](https://github.com/stellarshenson/jupyterlab_terminal_show_in_file_browser_extension).
+
+![](.resources/screenshot.png)
 
 ## Features
 

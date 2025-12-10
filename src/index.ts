@@ -279,10 +279,16 @@ const plugin: JupyterFrontEndPlugin<void> = {
         // Prefer env_path (conda environment) if available, otherwise use resource_dir
         const targetPath = kernelInfo.env_path || kernelInfo.resource_dir;
 
+        // Convert to relative path for terminal (terminal:create-new requires relative path)
+        const relativePath = toRelativePath(targetPath, serverRoot);
+
+        // If outside workspace, use empty string (workspace root)
+        const terminalCwd = relativePath === null ? '' : relativePath;
+
         try {
-          // Open a new terminal
+          // Open a new terminal with relative path
           await commands.execute('terminal:create-new', {
-            cwd: targetPath
+            cwd: terminalCwd
           });
         } catch (error) {
           console.error('Failed to open terminal:', error);

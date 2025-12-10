@@ -130,6 +130,22 @@ class KernelPathHandler(APIHandler):
         # This is important because .venv/bin/python often symlinks to system Python
         original_path = executable_path
 
+        # Resolve symlinks for additional pattern matching
+        try:
+            real_path = os.path.realpath(executable_path)
+        except (OSError, ValueError):
+            real_path = executable_path
+
+        # Priority check: If .venv is anywhere in the path (original OR resolved),
+        # navigate to one level up from .venv
+        for path_to_check in [original_path, real_path]:
+            if "/.venv/" in path_to_check:
+                # Extract everything before /.venv/
+                venv_idx = path_to_check.find("/.venv/")
+                project_root = path_to_check[:venv_idx]
+                if os.path.isdir(project_root):
+                    return project_root
+
         # Pattern 1: uv/venv with .venv folder - /project/.venv/bin/python
         # Return project root (one level up from .venv)
         # Check original path first (before symlink resolution)
@@ -148,12 +164,6 @@ class KernelPathHandler(APIHandler):
             if os.path.exists(pyvenv_cfg):
                 # For named venvs, return the venv directory itself
                 return potential_venv
-
-        # Now resolve symlinks for conda detection
-        try:
-            real_path = os.path.realpath(executable_path)
-        except (OSError, ValueError):
-            real_path = executable_path
 
         # Pattern 3: Conda local environment - /project/subdir/envs/envname/bin/python
         # Return project root (two levels up from envs/envname)

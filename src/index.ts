@@ -14,6 +14,7 @@ import { URLExt, PageConfig } from '@jupyterlab/coreutils';
  */
 const SHOW_IN_BROWSER_CMD = 'launcher:show-kernel-in-file-browser';
 const OPEN_TERMINAL_CMD = 'launcher:open-terminal-at-kernel';
+const UNREGISTER_KERNEL_CMD = 'launcher:unregister-venv-kernel';
 
 /**
  * Interface for the kernel path API response.
@@ -28,10 +29,45 @@ interface IKernelPathResponse {
 }
 
 /**
+ * Interface for nb_venv_kernels environment entry.
+ */
+interface IVenvEnvironment {
+  name: string;
+  custom_name: string | null;
+  type: string;
+  exists: boolean;
+  has_kernel: boolean;
+  path: string;
+}
+
+/**
+ * Interface for nb_venv_kernels environments list response.
+ */
+interface IVenvEnvironmentsResponse {
+  environments: IVenvEnvironment[];
+  workspace_root: string;
+}
+
+/**
+ * Interface for nb_venv_kernels unregister response.
+ */
+interface IUnregisterResponse {
+  success: boolean;
+  message?: string;
+  error?: string;
+}
+
+/**
  * Store for the last right-clicked kernel display name.
  * This is set when a context menu is opened on a launcher card.
  */
 let lastClickedKernelName: string | null = null;
+
+/**
+ * Store for the venv environment info of the last right-clicked kernel.
+ * This is set when a context menu is opened on a launcher card.
+ */
+let lastClickedVenvEnv: IVenvEnvironment | null = null;
 
 /**
  * Fetch the kernel path information from the server.
@@ -64,6 +100,109 @@ async function fetchKernelPath(
   } catch (error) {
     console.error('Error fetching kernel path:', error);
     return null;
+  }
+}
+
+/**
+ * Fetch list of venv environments from nb_venv_kernels API.
+ *
+ * @returns Promise resolving to environments list or null if not available
+ */
+async function fetchVenvEnvironments(): Promise<IVenvEnvironmentsResponse | null> {
+  const settings = ServerConnection.makeSettings();
+  const url = URLExt.join(settings.baseUrl, 'nb-venv-kernels', 'environments');
+
+  try {
+    const response = await ServerConnection.makeRequest(url, {}, settings);
+
+    if (!response.ok) {
+      console.warn('nb_venv_kernels API not available');
+      return null;
+    }
+
+    const data = (await response.json()) as IVenvEnvironmentsResponse;
+    return data;
+  } catch (error) {
+    console.debug('nb_venv_kernels extension not installed:', error);
+    return null;
+  }
+}
+
+/**
+ * Find a venv environment matching the given display name.
+ *
+ * @param displayName - The kernel display name to match
+ * @returns The matching environment or null
+ */
+async function findVenvEnvironment(
+  displayName: string
+): Promise<IVenvEnvironment | null> {
+  const envData = await fetchVenvEnvironments();
+  if (!envData) {
+    return null;
+  }
+
+  // Find matching environment by name
+  // Display name patterns: "Python (envname)", "envname", "Python 3 (envname)"
+  for (const env of envData.environments) {
+    // Skip conda environments - they can't be unregistered via nb_venv_kernels
+    if (env.type === 'conda') {
+      continue;
+    }
+
+    const envName = env.name || '';
+    const customName = env.custom_name || '';
+
+    // Check if display_name contains the environment name
+    if (
+      (envName && displayName.includes(envName)) ||
+      (customName && displayName.includes(customName))
+    ) {
+      return env;
+    }
+  }
+
+  return null;
+}
+
+/**
+ * Unregister a venv environment via nb_venv_kernels API.
+ *
+ * @param envPath - The path of the environment to unregister
+ * @returns Promise resolving to unregister result
+ */
+async function unregisterVenvKernel(
+  envPath: string
+): Promise<IUnregisterResponse> {
+  const settings = ServerConnection.makeSettings();
+  const url = URLExt.join(settings.baseUrl, 'nb-venv-kernels', 'unregister');
+
+  try {
+    const response = await ServerConnection.makeRequest(
+      url,
+      {
+        method: 'POST',
+        body: JSON.stringify({ path: envPath })
+      },
+      settings
+    );
+
+    const data = (await response.json()) as IUnregisterResponse;
+
+    if (!response.ok) {
+      return {
+        success: false,
+        error: data.error || 'Failed to unregister kernel'
+      };
+    }
+
+    return { success: true, message: data.message };
+  } catch (error) {
+    console.error('Error unregistering kernel:', error);
+    return {
+      success: false,
+      error: `Network error: ${error}`
+    };
   }
 }
 
@@ -159,17 +298,25 @@ function extractKernelNameFromCard(element: HTMLElement): string | null {
 }
 
 /**
- * Setup event listener to capture right-clicked kernel name.
+ * Setup event listener to capture right-clicked kernel name and venv info.
  */
 function setupContextMenuCapture(): void {
   document.addEventListener(
     'contextmenu',
-    (event: MouseEvent) => {
+    async (event: MouseEvent) => {
       const target = event.target as HTMLElement;
       if (target) {
         const card = target.closest('.jp-LauncherCard');
         if (card) {
           lastClickedKernelName = extractKernelNameFromCard(target);
+          // Reset venv env and fetch in background
+          lastClickedVenvEnv = null;
+          if (lastClickedKernelName) {
+            // Fetch venv info asynchronously - will be available for menu actions
+            findVenvEnvironment(lastClickedKernelName).then(env => {
+              lastClickedVenvEnv = env;
+            });
+          }
         }
       }
     },
@@ -300,8 +447,57 @@ const plugin: JupyterFrontEndPlugin<void> = {
       }
     });
 
+    // Add the "Unregister Kernel" command (only for nb_venv_kernels managed kernels)
+    commands.addCommand(UNREGISTER_KERNEL_CMD, {
+      label: 'Unregister Kernel',
+      caption: 'Remove this kernel from nb_venv_kernels registry',
+      isEnabled: () => lastClickedKernelName !== null && lastClickedVenvEnv !== null,
+      isVisible: () => lastClickedVenvEnv !== null,
+      execute: async () => {
+        if (!lastClickedKernelName) {
+          await showErrorMessage(
+            'No Kernel Selected',
+            'Could not determine which kernel was selected.'
+          );
+          return;
+        }
+
+        // Use cached venv environment or fetch if not available yet
+        let env = lastClickedVenvEnv;
+        if (!env) {
+          env = await findVenvEnvironment(lastClickedKernelName);
+        }
+
+        if (!env) {
+          await showErrorMessage(
+            'Not a venv Kernel',
+            `"${lastClickedKernelName}" is not managed by nb_venv_kernels.`
+          );
+          return;
+        }
+
+        // Unregister the kernel
+        const result = await unregisterVenvKernel(env.path);
+
+        if (result.success) {
+          // Show success message
+          console.log(`Kernel unregistered: ${env.path}`);
+          // Optionally refresh the launcher - user can refresh manually
+          await showErrorMessage(
+            'Kernel Unregistered',
+            `Successfully unregistered "${env.name}" (${env.path}).\n\nRefresh the page to update the launcher.`
+          );
+        } else {
+          await showErrorMessage(
+            'Unregister Failed',
+            `Failed to unregister kernel: ${result.error}`
+          );
+        }
+      }
+    });
+
     console.log(
-      `Commands registered: ${SHOW_IN_BROWSER_CMD}, ${OPEN_TERMINAL_CMD}`
+      `Commands registered: ${SHOW_IN_BROWSER_CMD}, ${OPEN_TERMINAL_CMD}, ${UNREGISTER_KERNEL_CMD}`
     );
   }
 };

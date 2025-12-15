@@ -1,6 +1,6 @@
 {
     "name": "jupyterlab_launcher_navigate_to_kernel_extension",
-    "version": "1.1.4",
+    "version": "1.1.8",
     "description": "Jupyterlab extension to allow user to right-click on the kernel launcher button and select 'Show in File Browser' or 'Open Terminal at location' menus and get them to navigate to location or open location in terminal respectively",
     "keywords": [
         "jupyter",
@@ -92,7 +92,8 @@
         "yjs": "^13.5.0"
     },
     "resolutions": {
-        "lib0": "0.2.111"
+        "lib0": "0.2.111",
+        "duplicate-package-checker-webpack-plugin/chalk": "4.1.2"
     },
     "sideEffects": [
         "style/*.css",

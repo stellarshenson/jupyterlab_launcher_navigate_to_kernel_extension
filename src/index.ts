@@ -64,10 +64,10 @@ interface IUnregisterResponse {
 let lastClickedKernelName: string | null = null;
 
 /**
- * Store for the venv environment info of the last right-clicked kernel.
- * This is set when a context menu is opened on a launcher card.
+ * Flag indicating whether nb_venv_kernels extension is available.
+ * Checked once at startup.
  */
-let lastClickedVenvEnv: IVenvEnvironment | null = null;
+let nbVenvKernelsAvailable = false;
 
 /**
  * Fetch the kernel path information from the server.
@@ -100,6 +100,24 @@ async function fetchKernelPath(
   } catch (error) {
     console.error('Error fetching kernel path:', error);
     return null;
+  }
+}
+
+/**
+ * Check if nb_venv_kernels extension is available.
+ *
+ * @returns Promise resolving to true if available, false otherwise
+ */
+async function checkNbVenvKernelsAvailable(): Promise<boolean> {
+  const settings = ServerConnection.makeSettings();
+  const url = URLExt.join(settings.baseUrl, 'nb-venv-kernels', 'environments');
+
+  try {
+    const response = await ServerConnection.makeRequest(url, {}, settings);
+    return response.ok;
+  } catch (error) {
+    console.debug('nb_venv_kernels extension not installed:', error);
+    return false;
   }
 }
 
@@ -298,25 +316,17 @@ function extractKernelNameFromCard(element: HTMLElement): string | null {
 }
 
 /**
- * Setup event listener to capture right-clicked kernel name and venv info.
+ * Setup event listener to capture right-clicked kernel name.
  */
 function setupContextMenuCapture(): void {
   document.addEventListener(
     'contextmenu',
-    async (event: MouseEvent) => {
+    (event: MouseEvent) => {
       const target = event.target as HTMLElement;
       if (target) {
         const card = target.closest('.jp-LauncherCard');
         if (card) {
           lastClickedKernelName = extractKernelNameFromCard(target);
-          // Reset venv env and fetch in background
-          lastClickedVenvEnv = null;
-          if (lastClickedKernelName) {
-            // Fetch venv info asynchronously - will be available for menu actions
-            findVenvEnvironment(lastClickedKernelName).then(env => {
-              lastClickedVenvEnv = env;
-            });
-          }
         }
       }
     },
@@ -351,6 +361,14 @@ const plugin: JupyterFrontEndPlugin<void> = {
 
     // Setup event listener to capture kernel name on right-click
     setupContextMenuCapture();
+
+    // Check if nb_venv_kernels is available (for unregister feature)
+    checkNbVenvKernelsAvailable().then(available => {
+      nbVenvKernelsAvailable = available;
+      if (available) {
+        console.log('nb_venv_kernels extension detected - unregister feature enabled');
+      }
+    });
 
     // Add the "Show in File Browser" command
     commands.addCommand(SHOW_IN_BROWSER_CMD, {
@@ -447,12 +465,12 @@ const plugin: JupyterFrontEndPlugin<void> = {
       }
     });
 
-    // Add the "Unregister Kernel" command (only for nb_venv_kernels managed kernels)
+    // Add the "Unregister Kernel" command (shown when nb_venv_kernels is available)
     commands.addCommand(UNREGISTER_KERNEL_CMD, {
       label: 'Unregister Kernel',
       caption: 'Remove this kernel from nb_venv_kernels registry',
-      isEnabled: () => lastClickedKernelName !== null && lastClickedVenvEnv !== null,
-      isVisible: () => lastClickedVenvEnv !== null,
+      isEnabled: () => lastClickedKernelName !== null && nbVenvKernelsAvailable,
+      isVisible: () => nbVenvKernelsAvailable,
       execute: async () => {
         if (!lastClickedKernelName) {
           await showErrorMessage(
@@ -462,15 +480,12 @@ const plugin: JupyterFrontEndPlugin<void> = {
           return;
         }
 
-        // Use cached venv environment or fetch if not available yet
-        let env = lastClickedVenvEnv;
-        if (!env) {
-          env = await findVenvEnvironment(lastClickedKernelName);
-        }
+        // Find the venv environment for this kernel
+        const env = await findVenvEnvironment(lastClickedKernelName);
 
         if (!env) {
           await showErrorMessage(
-            'Not a venv Kernel',
+            'Cannot Unregister',
             `"${lastClickedKernelName}" is not managed by nb_venv_kernels.`
           );
           return;
@@ -480,12 +495,10 @@ const plugin: JupyterFrontEndPlugin<void> = {
         const result = await unregisterVenvKernel(env.path);
 
         if (result.success) {
-          // Show success message
           console.log(`Kernel unregistered: ${env.path}`);
-          // Optionally refresh the launcher - user can refresh manually
           await showErrorMessage(
             'Kernel Unregistered',
-            `Successfully unregistered "${env.name}" (${env.path}).\n\nRefresh the page to update the launcher.`
+            `Successfully unregistered "${env.name}" (${env.path}).\n\nTo re-register this environment, use:\n  nb_venv_kernels register ${env.path}`
           );
         } else {
           await showErrorMessage(

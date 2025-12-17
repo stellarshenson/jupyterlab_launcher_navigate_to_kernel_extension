@@ -5,9 +5,10 @@ import {
 import { IDefaultFileBrowser } from '@jupyterlab/filebrowser';
 import { ILauncher } from '@jupyterlab/launcher';
 import { ITerminalTracker } from '@jupyterlab/terminal';
-import { showErrorMessage } from '@jupyterlab/apputils';
+import { showErrorMessage, showDialog, Dialog } from '@jupyterlab/apputils';
 import { ServerConnection } from '@jupyterlab/services';
 import { URLExt, PageConfig } from '@jupyterlab/coreutils';
+import { Widget } from '@lumino/widgets';
 
 /**
  * Command IDs for the extension.
@@ -15,6 +16,7 @@ import { URLExt, PageConfig } from '@jupyterlab/coreutils';
 const SHOW_IN_BROWSER_CMD = 'launcher:show-kernel-in-file-browser';
 const OPEN_TERMINAL_CMD = 'launcher:open-terminal-at-kernel';
 const UNREGISTER_KERNEL_CMD = 'launcher:unregister-venv-kernel';
+const REMOVE_ENVIRONMENT_CMD = 'launcher:remove-venv-environment';
 
 /**
  * Interface for the kernel path API response.
@@ -217,6 +219,67 @@ async function unregisterVenvKernel(
     return { success: true, message: data.message };
   } catch (error) {
     console.error('Error unregistering kernel:', error);
+    return {
+      success: false,
+      error: `Network error: ${error}`
+    };
+  }
+}
+
+/**
+ * Check if an environment path is a local .venv environment.
+ * Local environments have .venv in their path.
+ *
+ * @param envPath - The environment path to check
+ * @returns true if the environment is local (.venv based)
+ */
+function isLocalVenvEnvironment(envPath: string): boolean {
+  return envPath.includes('/.venv') || envPath.includes('\\.venv');
+}
+
+/**
+ * Remove a directory via the Jupyter server contents API.
+ *
+ * @param dirPath - The absolute path to the directory to remove
+ * @param serverRoot - The server root directory
+ * @returns Promise resolving to success status and optional error message
+ */
+async function removeDirectory(
+  dirPath: string,
+  serverRoot: string
+): Promise<{ success: boolean; error?: string }> {
+  const settings = ServerConnection.makeSettings();
+
+  // Convert to relative path for the contents API
+  const relativePath = toRelativePath(dirPath, serverRoot);
+
+  if (relativePath === null) {
+    return {
+      success: false,
+      error: 'Environment is outside the workspace and cannot be removed.'
+    };
+  }
+
+  const url = URLExt.join(settings.baseUrl, 'api', 'contents', relativePath);
+
+  try {
+    const response = await ServerConnection.makeRequest(
+      url,
+      { method: 'DELETE' },
+      settings
+    );
+
+    if (!response.ok) {
+      const text = await response.text();
+      return {
+        success: false,
+        error: `Server error: ${response.status} ${text}`
+      };
+    }
+
+    return { success: true };
+  } catch (error) {
+    console.error('Error removing directory:', error);
     return {
       success: false,
       error: `Network error: ${error}`
@@ -496,10 +559,18 @@ const plugin: JupyterFrontEndPlugin<void> = {
 
         if (result.success) {
           console.log(`Kernel unregistered: ${env.path}`);
-          await showErrorMessage(
-            'Kernel Unregistered',
-            `Successfully unregistered "${env.name}" (${env.path}).\n\nTo re-register this environment, use:\n  nb_venv_kernels register ${env.path}`
-          );
+          const bodyWidget = new Widget();
+          const p1 = document.createElement('p');
+          p1.textContent = `Successfully unregistered "${env.name}" (${env.path}).`;
+          const p2 = document.createElement('p');
+          p2.textContent = `To re-register, run: nb_venv_kernels register ${env.path}`;
+          bodyWidget.node.appendChild(p1);
+          bodyWidget.node.appendChild(p2);
+          await showDialog({
+            title: 'Kernel Unregistered',
+            body: bodyWidget,
+            buttons: [Dialog.okButton()]
+          });
         } else {
           await showErrorMessage(
             'Unregister Failed',
@@ -509,8 +580,105 @@ const plugin: JupyterFrontEndPlugin<void> = {
       }
     });
 
+    // Add the "Remove Environment" command (dangerous - physically removes .venv folder)
+    commands.addCommand(REMOVE_ENVIRONMENT_CMD, {
+      label: 'Remove Environment (dangerous)',
+      caption: 'Physically remove the .venv folder containing this environment',
+      isEnabled: () => lastClickedKernelName !== null && nbVenvKernelsAvailable,
+      isVisible: () => nbVenvKernelsAvailable,
+      execute: async () => {
+        if (!lastClickedKernelName) {
+          await showErrorMessage(
+            'No Kernel Selected',
+            'Could not determine which kernel was selected.'
+          );
+          return;
+        }
+
+        // Find the venv environment for this kernel
+        const env = await findVenvEnvironment(lastClickedKernelName);
+
+        if (!env) {
+          await showErrorMessage(
+            'Cannot Remove',
+            `"${lastClickedKernelName}" is not managed by nb_venv_kernels.`
+          );
+          return;
+        }
+
+        // Check if this is a local .venv environment
+        if (!isLocalVenvEnvironment(env.path)) {
+          const notLocalWidget = new Widget();
+          const notLocalP1 = document.createElement('p');
+          notLocalP1.textContent = `"${env.name}" is not a local .venv environment.`;
+          const notLocalP2 = document.createElement('p');
+          notLocalP2.textContent = 'Only local environments (with .venv in their path) can be removed.';
+          notLocalWidget.node.appendChild(notLocalP1);
+          notLocalWidget.node.appendChild(notLocalP2);
+          await showDialog({
+            title: 'Cannot Remove',
+            body: notLocalWidget,
+            buttons: [Dialog.okButton()]
+          });
+          return;
+        }
+
+        // Show confirmation dialog
+        const confirmWidget = new Widget();
+        const confirmP1 = document.createElement('p');
+        confirmP1.textContent = `Are you sure you want to permanently remove "${env.name}"?`;
+        const confirmP2 = document.createElement('p');
+        confirmP2.textContent = `This will delete: ${env.path}`;
+        const confirmP3 = document.createElement('p');
+        confirmP3.style.fontWeight = 'bold';
+        confirmP3.textContent = 'This action cannot be undone!';
+        confirmWidget.node.appendChild(confirmP1);
+        confirmWidget.node.appendChild(confirmP2);
+        confirmWidget.node.appendChild(confirmP3);
+
+        const result = await showDialog({
+          title: 'Remove Environment',
+          body: confirmWidget,
+          buttons: [
+            Dialog.cancelButton(),
+            Dialog.warnButton({ label: 'Remove' })
+          ]
+        });
+
+        if (!result.button.accept) {
+          return;
+        }
+
+        // First unregister the kernel
+        const unregisterResult = await unregisterVenvKernel(env.path);
+        if (!unregisterResult.success) {
+          await showErrorMessage(
+            'Remove Failed',
+            `Failed to unregister kernel before removal: ${unregisterResult.error}`
+          );
+          return;
+        }
+
+        // Then remove the directory
+        const removeResult = await removeDirectory(env.path, serverRoot);
+
+        if (removeResult.success) {
+          console.log(`Environment removed: ${env.path}`);
+          await showErrorMessage(
+            'Environment Removed',
+            `Successfully removed "${env.name}" (${env.path}).`
+          );
+        } else {
+          await showErrorMessage(
+            'Remove Failed',
+            `Kernel was unregistered but failed to remove directory: ${removeResult.error}`
+          );
+        }
+      }
+    });
+
     console.log(
-      `Commands registered: ${SHOW_IN_BROWSER_CMD}, ${OPEN_TERMINAL_CMD}, ${UNREGISTER_KERNEL_CMD}`
+      `Commands registered: ${SHOW_IN_BROWSER_CMD}, ${OPEN_TERMINAL_CMD}, ${UNREGISTER_KERNEL_CMD}, ${REMOVE_ENVIRONMENT_CMD}`
     );
   }
 };

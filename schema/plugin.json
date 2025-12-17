@@ -19,6 +19,11 @@
         "command": "launcher:unregister-venv-kernel",
         "selector": ".jp-LauncherCard",
         "rank": 12
+      },
+      {
+        "command": "launcher:remove-venv-environment",
+        "selector": ".jp-LauncherCard",
+        "rank": 13
       }
     ]
   },

@@ -16,6 +16,8 @@ Right-click on any kernel launcher card to navigate to its project directory or 
 
 - **Show in File Browser** - Navigate to the kernel's project root
 - **Open Terminal at Location** - Open terminal at the kernel's project directory
+- **Unregister Kernel** - Remove kernel from `nb_venv_kernels` registry (requires `nb_venv_kernels`)
+- **Remove Environment** - Permanently delete local `.venv` environments with confirmation (requires `nb_venv_kernels`)
 - **Project-aware navigation** - For `.venv` environments, navigates to project root (one level up from `.venv`)
 - **Dynamic kernel support** - Works with `nb_conda_kernels` and `nb_venv_kernels` providers
 

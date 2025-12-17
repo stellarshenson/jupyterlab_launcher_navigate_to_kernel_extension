@@ -19,6 +19,11 @@ const UNREGISTER_KERNEL_CMD = 'launcher:unregister-venv-kernel';
 const REMOVE_ENVIRONMENT_CMD = 'launcher:remove-venv-environment';
 
 /**
+ * Command ID for nb_venv_kernels refresh (provided by that extension).
+ */
+const NB_VENV_KERNELS_REFRESH_CMD = 'nb_venv_kernels:refresh';
+
+/**
  * Interface for the kernel path API response.
  */
 interface IKernelPathResponse {
@@ -586,6 +591,10 @@ const plugin: JupyterFrontEndPlugin<void> = {
 
         if (result.success) {
           console.log(`Kernel unregistered: ${env.path}`);
+          // Refresh kernel list so changes are visible immediately
+          await commands.execute(NB_VENV_KERNELS_REFRESH_CMD).catch(() => {
+            // Ignore if refresh command not available
+          });
           const bodyWidget = new Widget();
           const p1 = document.createElement('p');
           p1.textContent = `Successfully unregistered "${env.name}" (${env.path}).`;
@@ -691,6 +700,10 @@ const plugin: JupyterFrontEndPlugin<void> = {
 
         if (removeResult.success) {
           console.log(`Environment removed: ${env.path}`);
+          // Refresh kernel list so changes are visible immediately
+          await commands.execute(NB_VENV_KERNELS_REFRESH_CMD).catch(() => {
+            // Ignore if refresh command not available
+          });
           await showErrorMessage(
             'Environment Removed',
             `Successfully removed "${env.name}" (${env.path}).`

@@ -251,13 +251,32 @@ async function removeDirectory(
   const settings = ServerConnection.makeSettings();
 
   // Convert to relative path for the contents API
-  const relativePath = toRelativePath(dirPath, serverRoot);
+  let relativePath = toRelativePath(dirPath, serverRoot);
 
+  // If standard conversion fails, try alternative approaches
   if (relativePath === null) {
-    return {
-      success: false,
-      error: 'Environment is outside the workspace and cannot be removed.'
-    };
+    console.debug(
+      `Path conversion failed: dirPath="${dirPath}", serverRoot="${serverRoot}"`
+    );
+
+    // Fallback: if serverRoot is empty or '~', try using home-relative path
+    // The contents API URL already contains the server's notion of the root
+    if (!serverRoot || serverRoot === '~' || serverRoot === '') {
+      // Extract path from after '/home/username' or similar
+      const homeMatch = dirPath.match(/^\/(?:home|Users)\/[^/]+\/(.+)$/);
+      if (homeMatch) {
+        relativePath = homeMatch[1];
+        console.debug(`Using home-relative fallback path: ${relativePath}`);
+      }
+    }
+
+    // If still null, the path is truly outside workspace
+    if (relativePath === null) {
+      return {
+        success: false,
+        error: `Environment path "${dirPath}" is outside the workspace (root: "${serverRoot}") and cannot be removed.`
+      };
+    }
   }
 
   const url = URLExt.join(settings.baseUrl, 'api', 'contents', relativePath);
@@ -626,7 +645,7 @@ const plugin: JupyterFrontEndPlugin<void> = {
         // Show confirmation dialog
         const confirmWidget = new Widget();
         const confirmP1 = document.createElement('p');
-        confirmP1.textContent = `Are you sure you want to permanently remove "${env.name}"?`;
+        confirmP1.textContent = `Are you sure you want to permanently remove virtual environment "${env.name}"?`;
         const confirmP2 = document.createElement('p');
         confirmP2.textContent = `This will delete: ${env.path}`;
         const confirmP3 = document.createElement('p');

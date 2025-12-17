@@ -250,32 +250,40 @@ async function removeDirectory(
 ): Promise<{ success: boolean; error?: string }> {
   const settings = ServerConnection.makeSettings();
 
-  // Convert to relative path for the contents API
-  let relativePath = toRelativePath(dirPath, serverRoot);
+  // Determine relative path for the contents API
+  let relativePath: string | null = null;
 
-  // If standard conversion fails, try alternative approaches
-  if (relativePath === null) {
-    console.debug(
-      `Path conversion failed: dirPath="${dirPath}", serverRoot="${serverRoot}"`
-    );
+  // If path doesn't start with '/', it's already relative - use it directly
+  if (!dirPath.startsWith('/')) {
+    relativePath = dirPath;
+    console.debug(`Path is already relative: ${relativePath}`);
+  } else {
+    // Convert absolute path to relative path
+    relativePath = toRelativePath(dirPath, serverRoot);
 
-    // Fallback: if serverRoot is empty or '~', try using home-relative path
-    // The contents API URL already contains the server's notion of the root
-    if (!serverRoot || serverRoot === '~' || serverRoot === '') {
-      // Extract path from after '/home/username' or similar
-      const homeMatch = dirPath.match(/^\/(?:home|Users)\/[^/]+\/(.+)$/);
-      if (homeMatch) {
-        relativePath = homeMatch[1];
-        console.debug(`Using home-relative fallback path: ${relativePath}`);
-      }
-    }
-
-    // If still null, the path is truly outside workspace
+    // If standard conversion fails, try alternative approaches
     if (relativePath === null) {
-      return {
-        success: false,
-        error: `Environment path "${dirPath}" is outside the workspace (root: "${serverRoot}") and cannot be removed.`
-      };
+      console.debug(
+        `Path conversion failed: dirPath="${dirPath}", serverRoot="${serverRoot}"`
+      );
+
+      // Fallback: if serverRoot is empty or '~', try using home-relative path
+      if (!serverRoot || serverRoot === '~' || serverRoot === '') {
+        // Extract path from after '/home/username' or similar
+        const homeMatch = dirPath.match(/^\/(?:home|Users)\/[^/]+\/(.+)$/);
+        if (homeMatch) {
+          relativePath = homeMatch[1];
+          console.debug(`Using home-relative fallback path: ${relativePath}`);
+        }
+      }
+
+      // If still null, the path is truly outside workspace
+      if (relativePath === null) {
+        return {
+          success: false,
+          error: `Environment path "${dirPath}" is outside the workspace (root: "${serverRoot}") and cannot be removed.`
+        };
+      }
     }
   }
 

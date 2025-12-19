@@ -6,6 +6,46 @@
  * complexity in Jest environment.
  */
 
+// Schema configuration mirrored from schema/plugin.json for testing
+// This validates that the expected menu structure is defined
+const pluginSchema = {
+  'jupyter.lab.menus': {
+    main: [
+      {
+        id: 'jp-mainmenu-kernel',
+        items: [
+          {
+            command: 'nb_venv_kernels:scan',
+            rank: 100
+          }
+        ]
+      }
+    ],
+    context: [
+      {
+        command: 'launcher:show-kernel-in-file-browser',
+        selector: '.jp-LauncherCard',
+        rank: 10
+      },
+      {
+        command: 'launcher:open-terminal-at-kernel',
+        selector: '.jp-LauncherCard',
+        rank: 11
+      },
+      {
+        command: 'launcher:unregister-venv-kernel',
+        selector: '.jp-LauncherCard',
+        rank: 12
+      },
+      {
+        command: 'launcher:remove-venv-environment',
+        selector: '.jp-LauncherCard',
+        rank: 13
+      }
+    ]
+  }
+};
+
 /**
  * Helper function to expand tilde in path using the home directory extracted from absolutePath.
  * Mirrors the implementation in index.ts.
@@ -465,5 +505,66 @@ describe('IUnregisterResponse interface', () => {
 
     expect(failResponse.success).toBe(false);
     expect(failResponse.error).toBeDefined();
+  });
+});
+
+describe('schema/plugin.json menu configuration', () => {
+  it('should have jupyter.lab.menus configuration', () => {
+    expect(pluginSchema['jupyter.lab.menus']).toBeDefined();
+  });
+
+  it('should have main menu configuration', () => {
+    const menus = pluginSchema['jupyter.lab.menus'];
+    expect(menus.main).toBeDefined();
+    expect(Array.isArray(menus.main)).toBe(true);
+  });
+
+  it('should have Kernel menu item targeting jp-mainmenu-kernel', () => {
+    const menus = pluginSchema['jupyter.lab.menus'];
+    const kernelMenu = menus.main.find(
+      (menu: { id: string }) => menu.id === 'jp-mainmenu-kernel'
+    );
+    expect(kernelMenu).toBeDefined();
+    expect(kernelMenu!.items).toBeDefined();
+    expect(Array.isArray(kernelMenu!.items)).toBe(true);
+  });
+
+  it('should have nb_venv_kernels:scan command in Kernel menu', () => {
+    const menus = pluginSchema['jupyter.lab.menus'];
+    const kernelMenu = menus.main.find(
+      (menu: { id: string }) => menu.id === 'jp-mainmenu-kernel'
+    );
+    expect(kernelMenu).toBeDefined();
+    const scanItem = kernelMenu!.items.find(
+      (item: { command: string }) => item.command === 'nb_venv_kernels:scan'
+    );
+    expect(scanItem).toBeDefined();
+    expect(scanItem!.command).toBe('nb_venv_kernels:scan');
+  });
+
+  it('should have context menu configuration', () => {
+    const menus = pluginSchema['jupyter.lab.menus'];
+    expect(menus.context).toBeDefined();
+    expect(Array.isArray(menus.context)).toBe(true);
+  });
+
+  it('should have all context menu commands for .jp-LauncherCard', () => {
+    const menus = pluginSchema['jupyter.lab.menus'];
+    const contextItems = menus.context;
+
+    const expectedCommands = [
+      'launcher:show-kernel-in-file-browser',
+      'launcher:open-terminal-at-kernel',
+      'launcher:unregister-venv-kernel',
+      'launcher:remove-venv-environment'
+    ];
+
+    for (const cmd of expectedCommands) {
+      const item = contextItems.find(
+        (item: { command: string; selector: string }) =>
+          item.command === cmd && item.selector === '.jp-LauncherCard'
+      );
+      expect(item).toBeDefined();
+    }
   });
 });

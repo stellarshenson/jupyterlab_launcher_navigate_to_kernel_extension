@@ -15,6 +15,8 @@ Context menu extension for kernel launcher cards. Right-click on any kernel to n
 
 ![](.resources/screenshot-kernel-context-menu.png)
 
+![](.resources/screenshot-kernel-kernel-menu.png)
+
 ## Features
 
 **Context Menu (right-click on kernel launcher card)**:
@@ -22,6 +24,9 @@ Context menu extension for kernel launcher cards. Right-click on any kernel to n
 - **Open Terminal at Location** - Open terminal at the kernel's project directory
 - **Unregister Kernel** - Remove kernel from registry (requires [nb_venv_kernels](https://github.com/stellarshenson/nb_venv_kernels))
 - **Remove Environment (dangerous)** - Permanently delete local `.venv` environments with confirmation (requires [nb_venv_kernels](https://github.com/stellarshenson/nb_venv_kernels))
+
+**Kernel Menu** (provided by [nb_venv_kernels](https://github.com/stellarshenson/nb_venv_kernels)):
+- **Scan for Virtual Environments** - Discover and register new virtual environments in your workspace
 
 **General**:
 - **Project-aware navigation** - For `.venv` environments, navigates to project root (one level up from `.venv`)

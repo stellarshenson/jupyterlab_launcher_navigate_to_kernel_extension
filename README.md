@@ -20,15 +20,18 @@ Context menu extension for kernel launcher cards. Right-click on any kernel to n
 ## Features
 
 **Context Menu (right-click on kernel launcher card)**:
+
 - **Show in File Browser** - Navigate to the kernel's project root
 - **Open Terminal at Location** - Open terminal at the kernel's project directory
 - **Unregister Kernel** - Remove kernel from registry (requires [nb_venv_kernels](https://github.com/stellarshenson/nb_venv_kernels))
 - **Remove Environment (dangerous)** - Permanently delete local `.venv` environments with confirmation (requires [nb_venv_kernels](https://github.com/stellarshenson/nb_venv_kernels))
 
 **Kernel Menu** (provided by [nb_venv_kernels](https://github.com/stellarshenson/nb_venv_kernels)):
+
 - **Scan for Virtual Environments** - Discover and register new virtual environments in your workspace
 
 **General**:
+
 - **Project-aware navigation** - For `.venv` environments, navigates to project root (one level up from `.venv`)
 - **Dynamic kernel support** - Works with `nb_conda_kernels` and `nb_venv_kernels` providers
 

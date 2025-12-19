@@ -65,6 +65,47 @@ interface IUnregisterResponse {
 }
 
 /**
+ * Show loading dialog with spinner
+ *
+ * @param message - The message to display next to the spinner
+ * @returns The dialog instance that can be disposed to close it
+ */
+function showLoadingDialog(message: string): Dialog<unknown> {
+  const content = document.createElement('div');
+  content.style.display = 'flex';
+  content.style.alignItems = 'center';
+  content.style.gap = '12px';
+  content.style.padding = '8px 0';
+  content.innerHTML = `
+    <div style="
+      width: 24px;
+      height: 24px;
+      border: 3px solid var(--jp-border-color2);
+      border-top-color: var(--jp-brand-color1);
+      border-radius: 50%;
+      animation: launcher-ext-spin 1s linear infinite;
+    "></div>
+    <span>${message}</span>
+    <style>
+      @keyframes launcher-ext-spin {
+        to { transform: rotate(360deg); }
+      }
+    </style>
+  `;
+
+  const body = new Widget({ node: content });
+
+  const dialog = new Dialog({
+    title: 'Please Wait',
+    body,
+    buttons: []
+  });
+
+  dialog.launch();
+  return dialog;
+}
+
+/**
  * Store for the last right-clicked kernel display name.
  * This is set when a context menu is opened on a launcher card.
  */
@@ -461,7 +502,9 @@ const plugin: JupyterFrontEndPlugin<void> = {
     checkNbVenvKernelsAvailable().then(available => {
       nbVenvKernelsAvailable = available;
       if (available) {
-        console.log('nb_venv_kernels extension detected - unregister feature enabled');
+        console.log(
+          'nb_venv_kernels extension detected - unregister feature enabled'
+        );
       }
     });
 
@@ -586,31 +629,46 @@ const plugin: JupyterFrontEndPlugin<void> = {
           return;
         }
 
-        // Unregister the kernel
-        const result = await unregisterVenvKernel(env.path);
+        // Show loading dialog with spinner
+        const loadingDialog = showLoadingDialog(
+          `Unregistering kernel "${env.name}"...`
+        );
 
-        if (result.success) {
-          console.log(`Kernel unregistered: ${env.path}`);
-          // Refresh kernel list so changes are visible immediately
-          await commands.execute(NB_VENV_KERNELS_REFRESH_CMD).catch(() => {
-            // Ignore if refresh command not available
-          });
-          const bodyWidget = new Widget();
-          const p1 = document.createElement('p');
-          p1.textContent = `Successfully unregistered "${env.name}" (${env.path}).`;
-          const p2 = document.createElement('p');
-          p2.textContent = `To re-register, run: nb_venv_kernels register ${env.path}`;
-          bodyWidget.node.appendChild(p1);
-          bodyWidget.node.appendChild(p2);
-          await showDialog({
-            title: 'Kernel Unregistered',
-            body: bodyWidget,
-            buttons: [Dialog.okButton()]
-          });
-        } else {
+        try {
+          // Unregister the kernel
+          const result = await unregisterVenvKernel(env.path);
+
+          loadingDialog.dispose();
+
+          if (result.success) {
+            console.log(`Kernel unregistered: ${env.path}`);
+            // Refresh kernel list so changes are visible immediately
+            await commands.execute(NB_VENV_KERNELS_REFRESH_CMD).catch(() => {
+              // Ignore if refresh command not available
+            });
+            const bodyWidget = new Widget();
+            const p1 = document.createElement('p');
+            p1.textContent = `Successfully unregistered "${env.name}" (${env.path}).`;
+            const p2 = document.createElement('p');
+            p2.textContent = `To re-register, run: nb_venv_kernels register ${env.path}`;
+            bodyWidget.node.appendChild(p1);
+            bodyWidget.node.appendChild(p2);
+            await showDialog({
+              title: 'Kernel Unregistered',
+              body: bodyWidget,
+              buttons: [Dialog.okButton()]
+            });
+          } else {
+            await showErrorMessage(
+              'Unregister Failed',
+              `Failed to unregister kernel: ${result.error}`
+            );
+          }
+        } catch (error) {
+          loadingDialog.dispose();
           await showErrorMessage(
             'Unregister Failed',
-            `Failed to unregister kernel: ${result.error}`
+            `An unexpected error occurred: ${error}`
           );
         }
       }
@@ -648,7 +706,8 @@ const plugin: JupyterFrontEndPlugin<void> = {
           const notLocalP1 = document.createElement('p');
           notLocalP1.textContent = `"${env.name}" is not a local .venv environment.`;
           const notLocalP2 = document.createElement('p');
-          notLocalP2.textContent = 'Only local environments (with .venv in their path) can be removed.';
+          notLocalP2.textContent =
+            'Only local environments (with .venv in their path) can be removed.';
           notLocalWidget.node.appendChild(notLocalP1);
           notLocalWidget.node.appendChild(notLocalP2);
           await showDialog({
@@ -685,33 +744,50 @@ const plugin: JupyterFrontEndPlugin<void> = {
           return;
         }
 
-        // First unregister the kernel
-        const unregisterResult = await unregisterVenvKernel(env.path);
-        if (!unregisterResult.success) {
+        // Show loading dialog with spinner
+        const loadingDialog = showLoadingDialog(
+          `Removing environment "${env.name}"...`
+        );
+
+        try {
+          // First unregister the kernel
+          const unregisterResult = await unregisterVenvKernel(env.path);
+          if (!unregisterResult.success) {
+            loadingDialog.dispose();
+            await showErrorMessage(
+              'Remove Failed',
+              `Failed to unregister kernel before removal: ${unregisterResult.error}`
+            );
+            return;
+          }
+
+          // Then remove the directory
+          const removeResult = await removeDirectory(env.path, serverRoot);
+
+          loadingDialog.dispose();
+
+          if (removeResult.success) {
+            console.log(`Environment removed: ${env.path}`);
+            // Refresh kernel list so changes are visible immediately
+            await commands.execute(NB_VENV_KERNELS_REFRESH_CMD).catch(() => {
+              // Ignore if refresh command not available
+            });
+            await showDialog({
+              title: 'Environment Removed',
+              body: `Successfully removed "${env.name}".`,
+              buttons: [Dialog.okButton()]
+            });
+          } else {
+            await showErrorMessage(
+              'Remove Failed',
+              `Kernel was unregistered but failed to remove directory: ${removeResult.error}`
+            );
+          }
+        } catch (error) {
+          loadingDialog.dispose();
           await showErrorMessage(
             'Remove Failed',
-            `Failed to unregister kernel before removal: ${unregisterResult.error}`
-          );
-          return;
-        }
-
-        // Then remove the directory
-        const removeResult = await removeDirectory(env.path, serverRoot);
-
-        if (removeResult.success) {
-          console.log(`Environment removed: ${env.path}`);
-          // Refresh kernel list so changes are visible immediately
-          await commands.execute(NB_VENV_KERNELS_REFRESH_CMD).catch(() => {
-            // Ignore if refresh command not available
-          });
-          await showErrorMessage(
-            'Environment Removed',
-            `Successfully removed "${env.name}" (${env.path}).`
-          );
-        } else {
-          await showErrorMessage(
-            'Remove Failed',
-            `Kernel was unregistered but failed to remove directory: ${removeResult.error}`
+            `An unexpected error occurred: ${error}`
           );
         }
       }

@@ -1,15 +1,15 @@
 {
-    "name": "jupyterlab_launcher_navigate_to_kernel_extension",
-    "version": "1.2.7",
+    "name": "jupyterlab_nb_venv_kernels_ui_extension",
+    "version": "1.2.9",
     "description": "Jupyterlab extension to allow user to right-click on the kernel launcher button and select 'Show in File Browser' or 'Open Terminal at location' menus and get them to navigate to location or open location in terminal respectively",
     "keywords": [
         "jupyter",
         "jupyterlab",
         "jupyterlab-extension"
     ],
-    "homepage": "https://github.com/stellarshenson/jupyterlab_launcher_navigate_to_kernel_extension",
+    "homepage": "https://github.com/stellarshenson/jupyterlab_nb_venv_kernels_ui_extension",
     "bugs": {
-        "url": "https://github.com/stellarshenson/jupyterlab_launcher_navigate_to_kernel_extension/issues"
+        "url": "https://github.com/stellarshenson/jupyterlab_nb_venv_kernels_ui_extension/issues"
     },
     "license": "BSD-3-Clause",
     "author": {
@@ -26,7 +26,7 @@
     "style": "style/index.css",
     "repository": {
         "type": "git",
-        "url": "https://github.com/stellarshenson/jupyterlab_launcher_navigate_to_kernel_extension.git"
+        "url": "https://github.com/stellarshenson/jupyterlab_nb_venv_kernels_ui_extension.git"
     },
     "scripts": {
         "build": "jlpm build:lib && jlpm build:labextension:dev",
@@ -38,7 +38,7 @@
         "clean": "jlpm clean:lib",
         "clean:lib": "rimraf lib tsconfig.tsbuildinfo",
         "clean:lintcache": "rimraf .eslintcache .stylelintcache",
-        "clean:labextension": "rimraf jupyterlab_launcher_navigate_to_kernel_extension/labextension jupyterlab_launcher_navigate_to_kernel_extension/_version.py",
+        "clean:labextension": "rimraf jupyterlab_nb_venv_kernels_ui_extension/labextension jupyterlab_nb_venv_kernels_ui_extension/_version.py",
         "clean:all": "jlpm clean:lib && jlpm clean:labextension && jlpm clean:lintcache",
         "eslint": "jlpm eslint:check --fix",
         "eslint:check": "eslint . --cache --ext .ts,.tsx",
@@ -106,7 +106,7 @@
     },
     "jupyterlab": {
         "extension": true,
-        "outputDir": "jupyterlab_launcher_navigate_to_kernel_extension/labextension",
+        "outputDir": "jupyterlab_nb_venv_kernels_ui_extension/labextension",
         "schemaDir": "schema"
     },
     "eslintIgnore": [

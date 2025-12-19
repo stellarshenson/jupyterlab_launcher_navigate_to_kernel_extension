@@ -430,10 +430,10 @@ function setupContextMenuCapture(): void {
 }
 
 /**
- * Initialization data for the jupyterlab_launcher_navigate_to_kernel_extension extension.
+ * Initialization data for the jupyterlab_nb_venv_kernels_ui_extension extension.
  */
 const plugin: JupyterFrontEndPlugin<void> = {
-  id: 'jupyterlab_launcher_navigate_to_kernel_extension:plugin',
+  id: 'jupyterlab_nb_venv_kernels_ui_extension:plugin',
   description:
     "Right-click kernel launcher cards to navigate file browser to kernel's location or open terminal there",
   autoStart: true,
@@ -446,7 +446,7 @@ const plugin: JupyterFrontEndPlugin<void> = {
     terminalTracker: ITerminalTracker | null
   ) => {
     console.log(
-      'JupyterLab extension jupyterlab_launcher_navigate_to_kernel_extension is activated!'
+      'JupyterLab extension jupyterlab_nb_venv_kernels_ui_extension is activated!'
     );
 
     const { commands } = app;

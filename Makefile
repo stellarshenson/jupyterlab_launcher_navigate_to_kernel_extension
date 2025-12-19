@@ -2,7 +2,7 @@
 # author: Stellars Henson <konrad.jelen@gmail.com>
 # License: MIT Open Source License
 
-.PHONY: build install clean uninstall publish dependencies mrproper increment_version install_dependencies check_dependencies upgrade help
+.PHONY: build install clean uninstall publish dependencies mrproper increment_version install_dependencies check_dependencies upgrade help test
 .DEFAULT_GOAL := help
 
 # Read current version from package.json (only if node is available)
@@ -25,8 +25,12 @@ build: clean increment_version check_dependencies
 	python -m build
 
 ## install package
-install: build 
+install: build
 	pip install dist/*.whl --force-reinstall
+
+## run tests
+test: check_dependencies
+	jlpm test
 
 ## clean builds and installables
 clean: uninstall  check_dependencies

@@ -1,7 +1,0 @@
-{
-  "ServerApp": {
-    "jpserver_extensions": {
-      "jupyterlab_launcher_navigate_to_kernel_extension": true
-    }
-  }
-}

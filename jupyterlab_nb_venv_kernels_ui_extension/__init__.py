@@ -7,7 +7,7 @@ except ImportError:
     # https://pip.pypa.io/en/stable/topics/local-project-installs/#editable-installs
     import warnings
     warnings.warn(
-        "Importing 'jupyterlab_launcher_navigate_to_kernel_extension' "
+        "Importing 'jupyterlab_nb_venv_kernels_ui_extension' "
         "outside a proper installation."
     )
     __version__ = "dev"
@@ -16,13 +16,13 @@ except ImportError:
 def _jupyter_labextension_paths():
     return [{
         "src": "labextension",
-        "dest": "jupyterlab_launcher_navigate_to_kernel_extension"
+        "dest": "jupyterlab_nb_venv_kernels_ui_extension"
     }]
 
 
 def _jupyter_server_extension_points():
     return [{
-        "module": "jupyterlab_launcher_navigate_to_kernel_extension"
+        "module": "jupyterlab_nb_venv_kernels_ui_extension"
     }]
 
 
@@ -36,5 +36,5 @@ def _load_jupyter_server_extension(server_app):
 
     setup_handlers(server_app.web_app)
     server_app.log.info(
-        "jupyterlab_launcher_navigate_to_kernel_extension server extension loaded."
+        "jupyterlab_nb_venv_kernels_ui_extension server extension loaded."
     )

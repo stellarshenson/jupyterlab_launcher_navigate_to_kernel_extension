@@ -3,4 +3,4 @@ node_modules
 **/lib
 **/package.json
 !/package.json
-jupyterlab_launcher_navigate_to_kernel_extension
+jupyterlab_nb_venv_kernels_ui_extension

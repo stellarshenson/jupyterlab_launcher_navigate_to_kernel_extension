@@ -1,4 +1,4 @@
-# Making a new release of jupyterlab_launcher_navigate_to_kernel_extension
+# Making a new release of jupyterlab_nb_venv_kernels_ui_extension
 
 The extension can be published to `PyPI` and `npm` manually or using the [Jupyter Releaser](https://github.com/jupyter-server/jupyter_releaser).
 

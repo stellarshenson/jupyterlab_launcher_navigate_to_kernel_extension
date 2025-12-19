@@ -11,20 +11,17 @@
 > [!IMPORTANT]
 > **Package Renamed**: This package was renamed from `jupyterlab_launcher_navigate_to_kernel_extension` to `jupyterlab_nb_venv_kernels_ui_extension` in version 1.2.8. If you have the old package installed, please uninstall it first: `pip uninstall jupyterlab-launcher-navigate-to-kernel-extension`
 
-Right-click on any kernel launcher card to navigate to its project directory or open a terminal there. Intended to help navigate around a busy workspace with many projects. Similar to [jupyterlab_terminal_show_in_file_browser_extension](https://github.com/stellarshenson/jupyterlab_terminal_show_in_file_browser_extension).
+Context menu extension for kernel launcher cards. Right-click on any kernel to navigate to its project directory, open a terminal, or manage the virtual environment. Intended to complement [nb_venv_kernels](https://github.com/stellarshenson/nb_venv_kernels) for workspace management.
 
-![](.resources/screenshot.png)
+![](.resources/screenshot-kernel-context-menu.png)
 
 ## Features
 
 **Context Menu (right-click on kernel launcher card)**:
 - **Show in File Browser** - Navigate to the kernel's project root
 - **Open Terminal at Location** - Open terminal at the kernel's project directory
-- **Unregister Kernel** - Remove kernel from `nb_venv_kernels` registry (requires `nb_venv_kernels`)
-- **Remove Environment** - Permanently delete local `.venv` environments with confirmation (requires `nb_venv_kernels`)
-
-**Kernel Menu**:
-- **Scan for Virtual Environments** - Discover and register new virtual environments in your workspace (requires `nb_venv_kernels`)
+- **Unregister Kernel** - Remove kernel from registry (requires [nb_venv_kernels](https://github.com/stellarshenson/nb_venv_kernels))
+- **Remove Environment (dangerous)** - Permanently delete local `.venv` environments with confirmation (requires [nb_venv_kernels](https://github.com/stellarshenson/nb_venv_kernels))
 
 **General**:
 - **Project-aware navigation** - For `.venv` environments, navigates to project root (one level up from `.venv`)

@@ -1,4 +1,4 @@
-# Makefile for Jupyterlab extensions version 1.26
+# Makefile for Jupyterlab extensions version 1.27
 # author: Stellars Henson <konrad.jelen@gmail.com>
 # License: MIT Open Source License
 

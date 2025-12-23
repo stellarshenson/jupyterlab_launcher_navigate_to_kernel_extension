@@ -88,14 +88,17 @@ class KernelPathHandler(APIHandler):
             executable_path = argv[0] if argv else None
 
             # Try to determine the environment path (for conda environments)
-            env_path = self._extract_env_path(executable_path, resource_dir)
+            env_path, is_global_conda = self._extract_env_path(
+                executable_path, resource_dir
+            )
 
             self.finish(json.dumps({
                 "kernel_name": kernel_name,
                 "display_name": display_name,
                 "resource_dir": resource_dir,
                 "executable_path": executable_path,
-                "env_path": env_path
+                "env_path": env_path,
+                "is_global_conda": is_global_conda
             }))
 
         except Exception as e:
@@ -109,7 +112,7 @@ class KernelPathHandler(APIHandler):
         self,
         executable_path: str | None,
         resource_dir: str
-    ) -> str | None:
+    ) -> tuple[str | None, bool]:
         """Extract the project path from the executable.
 
         For uv/venv environments (.venv folder), returns the project root
@@ -121,7 +124,9 @@ class KernelPathHandler(APIHandler):
             resource_dir: The kernel's resource directory
 
         Returns:
-            The project or environment root path, or None if not determinable
+            Tuple of (path, is_global_conda):
+            - path: The project or environment root path, or None if not determinable
+            - is_global_conda: True if this is a global conda environment
         """
         # PRIORITY CHECK: If .venv is in resource_dir, extract project root
         # This handles conda local envs where argv[0] is just "python" (relative)
@@ -131,10 +136,10 @@ class KernelPathHandler(APIHandler):
             venv_idx = resource_dir.find("/.venv/")
             project_root = resource_dir[:venv_idx]
             if os.path.isdir(project_root):
-                return project_root
+                return (project_root, False)
 
         if not executable_path:
-            return None
+            return (None, False)
 
         # Use original path first (before symlink resolution) for .venv detection
         # This is important because .venv/bin/python often symlinks to system Python
@@ -155,7 +160,7 @@ class KernelPathHandler(APIHandler):
                 venv_idx = path_to_check.find("/.venv/")
                 project_root = path_to_check[:venv_idx]
                 if os.path.isdir(project_root):
-                    return project_root
+                    return (project_root, False)
             # Check for /.venv at end of a path segment (e.g., if path ends with .venv)
             elif "/.venv" in path_to_check:
                 venv_idx = path_to_check.find("/.venv")
@@ -164,7 +169,7 @@ class KernelPathHandler(APIHandler):
                 if remaining == "" or remaining.startswith("/"):
                     project_root = path_to_check[:venv_idx]
                     if os.path.isdir(project_root):
-                        return project_root
+                        return (project_root, False)
 
         # Pattern 1: uv/venv with .venv folder - /project/.venv/bin/python
         # Return project root (one level up from .venv)
@@ -173,7 +178,7 @@ class KernelPathHandler(APIHandler):
         if venv_dot_match:
             project_root = venv_dot_match.group(1)
             if os.path.isdir(project_root):
-                return project_root
+                return (project_root, False)
 
         # Pattern 2: Named virtualenv - /path/to/venv/bin/python (not .venv)
         # Check if there's a pyvenv.cfg in the parent of bin/
@@ -183,7 +188,7 @@ class KernelPathHandler(APIHandler):
             pyvenv_cfg = os.path.join(potential_venv, "pyvenv.cfg")
             if os.path.exists(pyvenv_cfg):
                 # For named venvs, return the venv directory itself
-                return potential_venv
+                return (potential_venv, False)
 
         # Pattern 3: Conda local environment - /project/subdir/envs/envname/bin/python
         # Return project root (two levels up from envs/envname)
@@ -199,25 +204,26 @@ class KernelPathHandler(APIHandler):
             if subdir not in ("opt", "usr", "home"):
                 project_root = potential_project
                 if os.path.isdir(project_root):
-                    return project_root
+                    return (project_root, False)
 
         # Pattern 4: Global conda environment - /opt/conda/envs/envname/bin/python
         # or ~/miniconda3/envs/envname/bin/python
-        # Return the environment root
+        # Return the environment root (this is a global conda environment)
         conda_global_match = re.match(
             r"^(.*/(?:envs|conda)/[^/]+)(?:/bin/python.*)?$",
             real_path
         )
         if conda_global_match:
-            return conda_global_match.group(1)
+            return (conda_global_match.group(1), True)
 
         # Pattern 5: Base conda - /opt/conda/bin/python or similar
+        # This is also a global conda environment
         base_conda_match = re.match(
             r"^(/opt/conda|/home/[^/]+/(?:mini)?conda3?|/usr/local/conda)(?:/bin/python.*)?$",
             real_path
         )
         if base_conda_match:
-            return base_conda_match.group(1)
+            return (base_conda_match.group(1), True)
 
         # Pattern 6: System Python with kernelspec in share/jupyter/kernels
         # Return the directory containing the kernelspec
@@ -226,7 +232,7 @@ class KernelPathHandler(APIHandler):
             # e.g., /opt/conda/share/jupyter/kernels/python3 -> /opt/conda
             parts = resource_dir.split("/share/jupyter/kernels/")
             if parts[0]:
-                return parts[0]
+                return (parts[0], True)
 
         # Fallback: try to find environment root from executable path structure
         bin_match = re.match(r"^(.*)/bin/python.*$", real_path)
@@ -234,9 +240,9 @@ class KernelPathHandler(APIHandler):
             potential_env = bin_match.group(1)
             # Verify it looks like an environment (has bin, lib, etc.)
             if os.path.isdir(os.path.join(potential_env, "lib")):
-                return potential_env
+                return (potential_env, False)
 
-        return None
+        return (None, False)
 
 
 def setup_handlers(web_app):

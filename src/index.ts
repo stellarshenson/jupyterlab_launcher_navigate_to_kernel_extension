@@ -32,6 +32,7 @@ interface IKernelPathResponse {
   resource_dir: string;
   executable_path: string | null;
   env_path: string | null;
+  is_global_conda: boolean;
   error?: string;
 }
 
@@ -532,6 +533,23 @@ const plugin: JupyterFrontEndPlugin<void> = {
           return;
         }
 
+        // Check if this is a global conda environment
+        if (kernelInfo.is_global_conda) {
+          const content = document.createElement('div');
+          content.innerHTML = `
+            <p>Global conda environments are not associated with any specific project location.</p>
+            <p>The environment <strong>${lastClickedKernelName}</strong> is installed at:</p>
+            <p><code>${kernelInfo.env_path || kernelInfo.resource_dir}</code></p>
+          `;
+          const body = new Widget({ node: content });
+          await showDialog({
+            title: 'Global Conda Environment',
+            body,
+            buttons: [Dialog.okButton()]
+          });
+          return;
+        }
+
         // Prefer env_path (conda environment) if available, otherwise use resource_dir
         const targetPath = kernelInfo.env_path || kernelInfo.resource_dir;
 
@@ -576,6 +594,23 @@ const plugin: JupyterFrontEndPlugin<void> = {
             'Kernel Not Found',
             `Could not find path information for kernel "${lastClickedKernelName}".`
           );
+          return;
+        }
+
+        // Check if this is a global conda environment
+        if (kernelInfo.is_global_conda) {
+          const content = document.createElement('div');
+          content.innerHTML = `
+            <p>Global conda environments are not associated with any specific project location.</p>
+            <p>The environment <strong>${lastClickedKernelName}</strong> is installed at:</p>
+            <p><code>${kernelInfo.env_path || kernelInfo.resource_dir}</code></p>
+          `;
+          const body = new Widget({ node: content });
+          await showDialog({
+            title: 'Global Conda Environment',
+            body,
+            buttons: [Dialog.okButton()]
+          });
           return;
         }
 
